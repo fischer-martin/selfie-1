@@ -10,8 +10,7 @@ selfie.m selfie.s: selfie
 	./selfie -c selfie.c -o selfie.m -s selfie.s
 
 # Consider these targets as targets, not files
-
-.PHONY : compile quine escape debug replay os vm min mob smt sat assemble spike qemu boolector grader all clean
+.PHONY : compile quine escape debug replay os vm min mob smt mc sat assemble spike qemu boolector btormc grader all clean
 
 # Self-contained fixed-point of self-compilation
 compile: selfie
@@ -51,13 +50,33 @@ min: selfie.m selfie.s
 	diff -q selfie.m selfie4.m
 	diff -q selfie.s selfie4.s
 
-# Run mobster
+# Run mobster, the emulator without pager
 mob: selfie
 	./selfie -c -mob 1
 
-# Run monster
+# Run monster as symbolic execution engine
 smt: selfie
-	./selfie -c manuscript/code/symbolic.c -n 0
+	./selfie -c manuscript/code/symbolic/division-by-zero.c -se 0 35 --merge-enabled
+	./selfie -c manuscript/code/symbolic/invalid-memory-access.c -se 0 35 --merge-enabled
+	./selfie -c manuscript/code/symbolic/memory-access.c -se 0 35 --merge-enabled
+	./selfie -c manuscript/code/symbolic/nested-if-else.c -se 0 35 --merge-enabled
+	./selfie -c manuscript/code/symbolic/nested-if-else-reverse.c -se 0 35 --merge-enabled
+	./selfie -c manuscript/code/symbolic/nested-recursion.c -se 0 35 --merge-enabled
+	./selfie -c manuscript/code/symbolic/recursive-ackermann.c -se 0 35 --merge-enabled
+	./selfie -c manuscript/code/symbolic/recursive-factorial.c -se 0 35 --merge-enabled
+	./selfie -c manuscript/code/symbolic/recursive-fibonacci.c -se 0 10 --merge-enabled
+	./selfie -c manuscript/code/symbolic/simple-assignment.c -se 0 35 --merge-enabled
+	./selfie -c manuscript/code/symbolic/simple-decreasing-loop.c -se 0 35 --merge-enabled
+	./selfie -c manuscript/code/symbolic/simple-if-else.c -se 0 35 --merge-enabled
+	./selfie -c manuscript/code/symbolic/simple-if-else-reverse.c -se 0 35 --merge-enabled
+	./selfie -c manuscript/code/symbolic/simple-if-without-else.c -se 0 35 --merge-enabled
+	./selfie -c manuscript/code/symbolic/simple-increasing-loop.c -se 0 35 --merge-enabled
+	./selfie -c manuscript/code/symbolic/three-level-nested-loop.c -se 0 35 --merge-enabled
+	./selfie -c manuscript/code/symbolic/two-level-nested-loop.c -se 0 35 --merge-enabled
+
+# Run monster as symbolic model generator
+mc: selfie
+	./selfie -c manuscript/code/symbolic/simple-assignment.c -mc 0
 
 # Run SAT solver
 sat: selfie.m
@@ -84,22 +103,60 @@ qemu: selfie.m selfie.s
 
 # Test boolector SMT solver
 boolector: smt
-	boolector manuscript/code/symbolic.t -e 0 > selfie_boolector.sat
-	[ $$(grep ^sat$$ selfie_boolector.sat | wc -l) -eq 2 ]
-	[ $$(grep ^unsat$$ selfie_boolector.sat | wc -l) -eq 1 ]
+	boolector manuscript/code/symbolic/division-by-zero.smt -e 0 > division-by-zero.sat
+	[ $$(grep ^sat$$ division-by-zero.sat | wc -l) -eq 3 ]
+	boolector manuscript/code/symbolic/invalid-memory-access.smt -e 0 > invalid-memory-access.sat
+	[ $$(grep ^sat$$ invalid-memory-access.sat | wc -l) -eq 2 ]
+	boolector manuscript/code/symbolic/memory-access.smt -e 0 > memory-access.sat
+	[ $$(grep ^sat$$ memory-access.sat | wc -l) -eq 1 ]
+	boolector manuscript/code/symbolic/nested-if-else.smt -e 0 > nested-if-else.sat
+	[ $$(grep ^sat$$ nested-if-else.sat | wc -l) -eq 1 ]
+	boolector manuscript/code/symbolic/nested-if-else-reverse.smt -e 0 > nested-if-else-reverse.sat
+	[ $$(grep ^sat$$ nested-if-else-reverse.sat | wc -l) -eq 1 ]
+	boolector manuscript/code/symbolic/nested-recursion.smt -e 0 > nested-recursion.sat
+	[ $$(grep ^sat$$ nested-recursion.sat | wc -l) -eq 1 ]
+	boolector manuscript/code/symbolic/recursive-ackermann.smt -e 0 > recursive-ackermann.sat
+	[ $$(grep ^sat$$ recursive-ackermann.sat | wc -l) -eq 1 ]
+	boolector manuscript/code/symbolic/recursive-factorial.smt -e 0 > recursive-factorial.sat
+	[ $$(grep ^sat$$ recursive-factorial.sat | wc -l) -eq 1 ]
+	boolector manuscript/code/symbolic/recursive-fibonacci.smt -e 0 > recursive-fibonacci.sat
+	[ $$(grep ^sat$$ recursive-fibonacci.sat | wc -l) -eq 1 ]
+	boolector manuscript/code/symbolic/simple-assignment.smt -e 0 > simple-assignment.sat
+	[ $$(grep ^sat$$ simple-assignment.sat | wc -l) -eq 1 ]
+	boolector manuscript/code/symbolic/simple-decreasing-loop.smt -e 0 > simple-decreasing-loop.sat
+	[ $$(grep ^sat$$ simple-decreasing-loop.sat | wc -l) -eq 1 ]
+	boolector manuscript/code/symbolic/simple-if-else.smt -e 0 > simple-if-else.sat
+	[ $$(grep ^sat$$ simple-if-else.sat | wc -l) -eq 1 ]
+	boolector manuscript/code/symbolic/simple-if-else-reverse.smt -e 0 > simple-if-else-reverse.sat
+	[ $$(grep ^sat$$ simple-if-else-reverse.sat | wc -l) -eq 1 ]
+	boolector manuscript/code/symbolic/simple-if-without-else.smt -e 0 > simple-if-without-else.sat
+	[ $$(grep ^sat$$ simple-if-without-else.sat | wc -l) -eq 1 ]
+	boolector manuscript/code/symbolic/simple-increasing-loop.smt -e 0 > simple-increasing-loop.sat
+	[ $$(grep ^sat$$ simple-increasing-loop.sat | wc -l) -eq 1 ]
+	boolector manuscript/code/symbolic/three-level-nested-loop.smt -e 0 > three-level-nested-loop.sat
+	[ $$(grep ^sat$$ three-level-nested-loop.sat | wc -l) -eq 1 ]
+	boolector manuscript/code/symbolic/two-level-nested-loop.smt -e 0 > two-level-nested-loop.sat
+	[ $$(grep ^sat$$ two-level-nested-loop.sat | wc -l) -eq 1 ]
+
+# Test btormc bounded model checker
+btormc: mc
+	btormc manuscript/code/symbolic/simple-assignment.btor2
 
 # Test grader
 grader:
-	python3 -m unittest -v grader.tests.test_all
+	cd grader && python3 -m unittest discover -v
 
 # Run everything
-all: compile quine debug replay os vm min mob smt sat
+all: compile quine debug replay os vm min mob smt mc sat
 
 # Clean up
 clean:
 	rm -rf *.m
 	rm -rf *.s
-	rm -rf *.t
+	rm -rf *.smt
+	rm -rf *.btor2
+	rm -rf *.sat
 	rm -rf selfie
 	rm -rf selfie.exe
-	rm -rf manuscript/code/*.t
+	rm -rf manuscript/code/symbolic/*.smt
+	rm -rf manuscript/code/symbolic/*.btor2

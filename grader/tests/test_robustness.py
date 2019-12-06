@@ -3,53 +3,51 @@ from os import chdir, getcwd
 from shutil import copytree, rmtree
 from unittest.mock import patch
 
-from grader.tests.lib import Console
-from grader.self import main as grader_main, execute, EXITCODE_IOERROR
-import grader.self
+from self import main as grader_main
+from lib.runner import execute
+from lib.system import EXITCODE_IOERROR
+from tests.utils import CaptureOutput
 
-original_execute = execute
+dst = '/tmp/sel fie'
 
-def ignore(root, paths):
-  if './grader/tests/.tmp' in root:
-    return paths
-
-  return []
 
 class TestRobustness(TestCase):
 
-  def setUp(self):
-    patcher = patch('grader.self.print_loud')
-    self.addCleanup(patcher.stop)
-    self.mock_foo = patcher.start()
+    def setUp(self):
+        rmtree(dst, ignore_errors=True)
 
-  def execute_mock(self, command):
-    ret_code, output, error_output = original_execute(command)
+    def execute_mock(self, command):
+        ret_code, output, error_output = execute(command)
 
-    self.assertNotEqual(ret_code, EXITCODE_IOERROR)
+        self.assertNotEqual(ret_code, EXITCODE_IOERROR)
 
-    return (ret_code, output, error_output)
+        return (ret_code, output, error_output)
 
-  @patch('grader.self.execute')
-  def test_path_name_with_whitespaces(self, mock):
-    mock.side_effect = lambda c: self.execute_mock(c)
+    def insert_assignment_path(self, command):
+        return command.replace("<assignment>", "grader/assignments/hex-literal/")
 
-    dst = 'grader/tests/.tmp/sel fie'
+    @patch('lib.runner.execute')
+    def test_path_name_with_whitespaces(self, mock):
+        mock.side_effect = self.execute_mock
 
-    copytree('.', dst, ignore=ignore)
+        copytree('..', dst)
 
-    cwd = getcwd()
+        cwd = getcwd()
 
-    chdir('grader/tests/.tmp/sel fie')
+        chdir(dst)
 
-    with Console():
-      grader_main([getcwd(), 'hex-literal'])
+        with CaptureOutput(), patch('lib.runner.insert_assignment_path') as assignment_path_mock:
+            assignment_path_mock.side_effect = self.insert_assignment_path
 
-    chdir(cwd)
+            grader_main([getcwd(), 'hex-literal'])
 
-    rmtree(dst)
+        chdir(cwd)
 
-  def tearDown(self):
-    rmtree('grader/tests/.tmp', ignore_errors=True)
+        rmtree(dst)
+
+    def tearDown(self):
+        rmtree(dst, ignore_errors=True)
+
 
 if __name__ == '__main__':
-  main()
+    main()

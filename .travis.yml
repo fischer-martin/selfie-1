@@ -26,6 +26,7 @@ jobs:
         - docker run cksystemsteaching/selfie make spike
         - docker run cksystemsteaching/selfie make qemu
         - docker run cksystemsteaching/selfie make boolector
+        - docker run cksystemsteaching/selfie make btormc
         - docker run cksystemsteaching/selfie make grader
     - stage: deploy
       sudo: required
@@ -44,6 +45,7 @@ jobs:
         - docker run cksystemsteaching/selfie make spike
         - docker run cksystemsteaching/selfie make qemu
         - docker run cksystemsteaching/selfie make boolector
+        - docker run cksystemsteaching/selfie make btormc
         - docker run cksystemsteaching/selfie make grader
 notifications:
   email: false

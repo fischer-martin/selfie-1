@@ -1,33 +1,74 @@
 import unittest
 import sys
 import re
-from os import system
+import os
+# from os import system
 from os.path import isfile
+import shlex
 from subprocess import Popen, PIPE
+from unittest.mock import patch
 
-from grader.tests.lib import Console, compile_with_gcc_and_run
-from grader.self import main, defined_tests
-import grader.self
+from self import main as grader_main
+from lib.print import println
+from tests.utils import CaptureOutput, compile_with_gcc_and_run
+
+system = os.system
+
+
+class ExitError(Exception):
+    def __init__(self, code):
+        self.message = str(code)
+
 
 class TestBulkGrader(unittest.TestCase):
 
-  def test_bulk_grading_with_wrong_arguments(self):
-    process = Popen('grader/self.py -b', stdout=PIPE, stderr=PIPE, shell=True)
-    process.communicate()
-    self.assertNotEqual(process.returncode, 0)
+    def commit_without_auth(self, command):
+        return system(command.replace('git@github.com:', 'https://github.com/'))
 
-    process = Popen('grader/self.py -d', stdout=PIPE, stderr=PIPE, shell=True)
-    process.communicate()
-    self.assertNotEqual(process.returncode, 0)
+    @patch('os.system')
+    def test_bulk_grading_with_wrong_arguments(self, mock):
+        mock.side_effect = self.commit_without_auth
 
-  def test_bulk_grading(self):
-    process = Popen('grader/self.py -b grader/tests/links.txt base', stdout=PIPE, stderr=PIPE, shell=True)
-    output = process.communicate()[0].decode(sys.stdout.encoding)
+        process = Popen(shlex.split('./self.py -b'), stdout=PIPE,
+                        stderr=PIPE)
+        process.communicate()
+        self.assertNotEqual(process.returncode, 0)
 
-    self.assertEqual(process.returncode, 0)
+        process = Popen(shlex.split('./self.py -d'), stdout=PIPE,
+                        stderr=PIPE)
+        process.communicate()
+        self.assertNotEqual(process.returncode, 0)
 
-    for line in output.split('\n'):
-      self.assertTrue(line == '' or re.match('[^/]+/[^/:]+: [1-5]', line) != None)
+    def exit_mock(self, code):
+        if code != 0:
+            raise ExitError(code)
+
+    @patch('lib.cli.exit')
+    @patch('os.system')
+    def test_bulk_grading(self, mock, exit_mock):
+        mock.side_effect = self.commit_without_auth
+
+        exit_mock.side_effect = self.exit_mock
+
+        with CaptureOutput() as capture:
+            grader_main([sys.argv[0], '-b', 'tests/links.txt', 'self-compile'])
+
+            output = capture.get_loud_output()
+
+        for line in output.split('\n'):
+            self.assertTrue(line == '' or re.match(
+                '[^/]+/[^/:]+: [1-5]', line) != None)
+
+    def test_cloning_without_permissions(self):
+        with CaptureOutput() as capture:
+            grader_main([sys.argv[0], '-b', 'tests/links.txt', 'self-compile'])
+
+            output = capture.get_loud_output()
+
+        # should not raise an exception and state errors for both repositories
+        self.assertIn('cksystemsteaching/selfie: ', output)
+        self.assertIn('ChristianMoesl/selfie: ', output)
+
 
 if __name__ == '__main__':
-  unittest.main()
+    unittest.main()
