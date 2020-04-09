@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2015-2019, the Selfie Project authors. All rights reserved.
+Copyright (c) 2015-2020, the Selfie Project authors. All rights reserved.
 Please see the AUTHORS file for details. Use of this source code is
 governed by a BSD license that can be found in the LICENSE file.
 
@@ -384,8 +384,8 @@ uint64_t SYM_RBRACE       = 15; // }
 uint64_t SYM_PLUS         = 16; // +
 uint64_t SYM_MINUS        = 17; // -
 uint64_t SYM_ASTERISK     = 18; // *
-uint64_t SYM_DIV          = 19; // /
-uint64_t SYM_MOD          = 20; // %
+uint64_t SYM_DIVISION     = 19; // /
+uint64_t SYM_REMAINDER    = 20; // %
 uint64_t SYM_ASSIGN       = 21; // =
 uint64_t SYM_EQUALITY     = 22; // ==
 uint64_t SYM_NOTEQ        = 23; // !=
@@ -455,8 +455,8 @@ void init_scanner () {
   *(SYMBOLS + SYM_PLUS)         = (uint64_t) "+";
   *(SYMBOLS + SYM_MINUS)        = (uint64_t) "-";
   *(SYMBOLS + SYM_ASTERISK)     = (uint64_t) "*";
-  *(SYMBOLS + SYM_DIV)          = (uint64_t) "/";
-  *(SYMBOLS + SYM_MOD)          = (uint64_t) "%";
+  *(SYMBOLS + SYM_DIVISION)     = (uint64_t) "/";
+  *(SYMBOLS + SYM_REMAINDER)    = (uint64_t) "%";
   *(SYMBOLS + SYM_ASSIGN)       = (uint64_t) "=";
   *(SYMBOLS + SYM_EQUALITY)     = (uint64_t) "==";
   *(SYMBOLS + SYM_NOTEQ)        = (uint64_t) "!=";
@@ -594,8 +594,8 @@ void reset_parser();
 
 uint64_t is_not_rbrace_or_eof();
 uint64_t is_expression();
-uint64_t is_literal();
-uint64_t is_star_or_div_or_modulo();
+uint64_t is_int_or_char_literal();
+uint64_t is_mult_or_div_or_rem();
 uint64_t is_plus_or_minus();
 uint64_t is_comparison();
 
@@ -1293,7 +1293,7 @@ uint64_t DELETED                         = -1; // indicates that a symbolic memo
 uint64_t MERGED                          = -2; // indicates that a symbolic memory word has been merged
 uint64_t BEGIN_OF_SHARED_SYMBOLIC_MEMORY = -3; // indicates the beginning of the shared symbolic memory space
 
-uint64_t beq_limit; // limit of symbolic beq instructions on each part of the path between two merge locations
+uint64_t beq_limit = 35; // limit of symbolic beq instructions on each part of the path between two merge locations
 
 // -----------------------------------------------------------------
 // -------------------------- INTERPRETER --------------------------
@@ -2850,7 +2850,7 @@ uint64_t find_next_character() {
         number_of_comments = number_of_comments + 1;
       } else {
         // while looking for "//" and "/*" we actually found '/'
-        symbol = SYM_DIV;
+        symbol = SYM_DIVISION;
 
         return character;
       }
@@ -2947,7 +2947,7 @@ void get_symbol() {
   symbol = SYM_EOF;
 
   if (find_next_character() != CHAR_EOF) {
-    if (symbol != SYM_DIV) {
+    if (symbol != SYM_DIVISION) {
       // '/' may have already been recognized
       // while looking for whitespace and "//"
       if (is_character_letter()) {
@@ -3122,7 +3122,7 @@ void get_symbol() {
       } else if (character == CHAR_PERCENTAGE) {
         get_character();
 
-        symbol = SYM_MOD;
+        symbol = SYM_REMAINDER;
 
       } else if (character == CHAR_EQUAL) {
         get_character();
@@ -3376,7 +3376,7 @@ uint64_t is_expression() {
     return 0;
 }
 
-uint64_t is_literal() {
+uint64_t is_int_or_char_literal() {
   if (symbol == SYM_INTEGER)
     return 1;
   else if (symbol == SYM_CHARACTER)
@@ -3385,12 +3385,12 @@ uint64_t is_literal() {
     return 0;
 }
 
-uint64_t is_star_or_div_or_modulo() {
+uint64_t is_mult_or_div_or_rem() {
   if (symbol == SYM_ASTERISK)
     return 1;
-  else if (symbol == SYM_DIV)
+  else if (symbol == SYM_DIVISION)
     return 1;
-  else if (symbol == SYM_MOD)
+  else if (symbol == SYM_REMAINDER)
     return 1;
   else
     return 0;
@@ -3950,7 +3950,7 @@ uint64_t compile_factor() {
   } else
     dereference = 0;
 
-  // identifier or call?
+  // variable or call?
   if (symbol == SYM_IDENTIFIER) {
     variable_or_procedure_name = identifier;
 
@@ -3974,7 +3974,7 @@ uint64_t compile_factor() {
       // variable access: identifier
       type = load_variable_or_big_int(variable_or_procedure_name, VARIABLE);
 
-  // integer?
+  // integer literal?
   } else if (symbol == SYM_INTEGER) {
     load_integer(literal);
 
@@ -3982,7 +3982,7 @@ uint64_t compile_factor() {
 
     type = UINT64_T;
 
-  // character?
+  // character literal?
   } else if (symbol == SYM_CHARACTER) {
     talloc();
 
@@ -3992,7 +3992,7 @@ uint64_t compile_factor() {
 
     type = UINT64_T;
 
-  // string?
+  // string literal?
   } else if (symbol == SYM_STRING) {
     load_string(string);
 
@@ -4056,7 +4056,7 @@ uint64_t compile_term() {
   // assert: allocated_temporaries == n + 1
 
   // * / or % ?
-  while (is_star_or_div_or_modulo()) {
+  while (is_mult_or_div_or_rem()) {
     operator_symbol = symbol;
 
     get_symbol();
@@ -4070,9 +4070,9 @@ uint64_t compile_term() {
 
     if (operator_symbol == SYM_ASTERISK)
       emit_mul(previous_temporary(), previous_temporary(), current_temporary());
-    else if (operator_symbol == SYM_DIV)
+    else if (operator_symbol == SYM_DIVISION)
       emit_divu(previous_temporary(), previous_temporary(), current_temporary());
-    else if (operator_symbol == SYM_MOD)
+    else if (operator_symbol == SYM_REMAINDER)
       emit_remu(previous_temporary(), previous_temporary(), current_temporary());
 
     tfree(1);
@@ -4450,7 +4450,7 @@ void compile_statement() {
   if (symbol == SYM_ASTERISK) {
     get_symbol();
 
-    // "*" identifier
+    // "*" variable
     if (symbol == SYM_IDENTIFIER) {
       ltype = load_variable_or_big_int(identifier, VARIABLE);
 
@@ -4459,7 +4459,7 @@ void compile_statement() {
 
       get_symbol();
 
-      // "*" identifier "="
+      // "*" variable "="
       if (symbol == SYM_ASSIGN) {
         get_symbol();
 
@@ -4525,7 +4525,7 @@ void compile_statement() {
     } else
       syntax_error_symbol(SYM_LPARENTHESIS);
   }
-  // identifier "=" expression | call
+  // variable "=" expression | call
   else if (symbol == SYM_IDENTIFIER) {
     variable_or_procedure_name = identifier;
 
@@ -4546,7 +4546,7 @@ void compile_statement() {
       else
         syntax_error_symbol(SYM_SEMICOLON);
 
-    // identifier = expression
+    // variable = expression
     } else if (symbol == SYM_ASSIGN) {
       entry = get_variable_or_big_int(variable_or_procedure_name, VARIABLE);
 
@@ -4676,7 +4676,7 @@ uint64_t compile_initialization(uint64_t type) {
     } else
       initial_value = literal;
 
-    if (is_literal())
+    if (is_int_or_char_literal())
       get_symbol();
     else
       syntax_error_unexpected();
@@ -8553,24 +8553,24 @@ uint64_t compare_call_stacks(uint64_t* active_context, uint64_t* mergeable_conte
   entry_active = get_call_stack(active_context);
   entry_mergeable = get_call_stack(mergeable_context);
 
-  if (debug_merge) 
+  if (debug_merge)
     printf1("; Call stack of active context (%d):\n", (char*) active_context);
 
   while(entry_active) {
 
-    if (debug_merge) 
+    if (debug_merge)
       printf1("; %x\n", (char*) *(entry_active + 1));
 
     active_context_stack_length = active_context_stack_length + 1;
     entry_active = (uint64_t*) *(entry_active + 0);
   }
 
-  if (debug_merge) 
+  if (debug_merge)
     printf1("; Call stack of mergeable context (%d):\n", (char*) mergeable_context);
 
   while(entry_mergeable) {
 
-    if (debug_merge) 
+    if (debug_merge)
       printf1("; %x\n", (char*) *(entry_mergeable + 1));
 
     mergeable_context_stack_length = mergeable_context_stack_length + 1;
@@ -10024,26 +10024,41 @@ char* replace_extension(char* filename, char* extension) {
 
   s = string_alloc(string_length(filename) + 1 + string_length(extension));
 
-  i = 0;
+  // start reading at end of filename
+  i = string_length(filename);
 
   c = load_character(filename, i);
 
-  while (c != 0) {
-    store_character(s, i, c);
+  // look for extension
+  while (c != '.') {
+    if (c == '/')
+      i = 0;
 
-    if (c == '.') {
-      store_character(s, i, 0);
-
-      c = 0;
-    } else {
-      i = i + 1;
+    if (i > 0) {
+      i = i - 1;
 
       c = load_character(filename, i);
-    }
+    } else
+      c = '.';
   }
 
-  // writing s plus extension into s
-  sprintf2(s, "%s.%s", s, extension);
+  // filename has no extension
+  if (i == 0)
+    // writing filename plus extension into s
+    sprintf2(s, "%s.%s", filename, extension);
+  else {
+    // assert: s is zeroed and thus null-terminated
+
+    // copy filename without extension and null-terminator into s
+    while (i > 0) {
+      i = i - 1;
+
+      store_character(s, i, load_character(filename, i));
+    }
+
+    // writing s plus extension into s
+    sprintf2(s, "%s.%s", s, extension);
+  }
 
   return s;
 }
@@ -10073,21 +10088,6 @@ uint64_t monster(uint64_t* to_context) {
 
   output_name = smt_name;
   output_fd   = smt_fd;
-
-  if (number_of_remaining_arguments() > 1)
-    if (string_compare(peek_argument(1), "--merge-enabled")) {
-      merge_enabled = 1;
-
-      get_argument();
-    }
-
-  if (number_of_remaining_arguments() > 1)
-    if (string_compare(peek_argument(1), "--debug-merge")) {
-      debug_merge = 1;
-      merge_enabled = 1;
-
-      get_argument();
-    }
 
   printf1("; %s\n\n", SELFIE_URL);
 
@@ -10247,13 +10247,26 @@ uint64_t selfie_run(uint64_t machine) {
 
     max_execution_depth = atoi(get_argument());
 
-    if (number_of_remaining_arguments() == 0) {
-      print_usage();
+    // checking for the (optional) beq limit argument
+    if (number_of_remaining_arguments() > 0)
+      if (string_compare(peek_argument(0), "--merge-enabled") == 0)
+        if (string_compare(peek_argument(0), "--debug-merge") == 0)
+          // assert: argument is an integer representing the beq limit
+          beq_limit = atoi(get_argument());
 
-      return EXITCODE_BADARGUMENTS;
+    // checking for the (optional) argument whether to enable merging (in debug mode) or not
+    if (number_of_remaining_arguments() > 0) {
+      if (string_compare(peek_argument(0), "--merge-enabled")) {
+        merge_enabled = 1;
+
+        get_argument();
+      } else if (string_compare(peek_argument(0), "--debug-merge")) {
+        debug_merge = 1;
+        merge_enabled = 1;
+
+        get_argument();
+      }
     }
-
-    beq_limit = atoi(peek_argument(0));
   }
 
   boot_loader();
@@ -11745,6 +11758,10 @@ void check_address_validity(uint64_t start, uint64_t flow_nid, uint64_t lo_flow_
   current_nid = current_nid + 3;
 }
 
+/* Translates a given RISC-U binary to a BTOR2 model
+in time and space linear in the number of instructions
+in three iterations over all instructions for encoding
+the program counter, the data flow, and the control flow. */
 uint64_t selfie_model_generate() {
   uint64_t i;
 
