@@ -5,9 +5,13 @@ CFLAGS := -Wall -Wextra -O3 -m64 -D'uint64_t=unsigned long long'
 selfie: selfie.c
 	$(CC) $(CFLAGS) $< -o $@
 
-# Self-compile selfie.c into RISC-U selfie.m executable and RISC-U selfie.s assembly
-selfie.m selfie.s: selfie
-	./selfie -c selfie.c -o selfie.m -s selfie.s
+# Self-compile selfie.c into RISC-U selfie.m executable
+selfie.m: selfie
+	./selfie -c selfie.c -o selfie.m
+
+# Self-compile selfie.c into RISC-U selfie.s assembly
+selfie.s: selfie
+	./selfie -c selfie.c -s selfie.s
 
 # Consider these targets as targets, not files
 .PHONY : compile quine escape debug replay os vm min mob smt mc sat all assemble spike qemu boolector btormc grader grade everything clean
@@ -20,7 +24,7 @@ compile: selfie
 
 # Compile and run quine and compare its output to itself
 quine: selfie
-	./selfie -c manuscript/code/quine.c selfie.c -m 1 | sed '/^.\/selfie/d' | diff -q manuscript/code/quine.c -
+	./selfie -c manuscript/code/quine.c selfie.c -m 1 | sed '/selfie/d' | diff --strip-trailing-cr manuscript/code/quine.c -
 
 # Demonstrate available escape sequences
 escape: selfie
@@ -95,9 +99,9 @@ grade:
 	./grader/self.py self-compile
 
 # Assemble RISC-U with GNU toolchain for RISC-V
-assemble: selfie.m selfie.s
+assemble: selfie.s
 	riscv64-linux-gnu-as selfie.s -o a.out
-	rm -rf a.out
+	rm -f a.out
 
 # Run selfie on spike
 spike: selfie.m selfie.s
@@ -158,12 +162,12 @@ everything: all assemble spike qemu boolector btormc grader grade
 
 # Clean up
 clean:
-	rm -rf *.m
-	rm -rf *.s
-	rm -rf *.smt
-	rm -rf *.btor2
-	rm -rf *.sat
-	rm -rf selfie
-	rm -rf selfie.exe
-	rm -rf manuscript/code/symbolic/*.smt
-	rm -rf manuscript/code/symbolic/*.btor2
+	rm -f *.m
+	rm -f *.s
+	rm -f *.smt
+	rm -f *.btor2
+	rm -f *.sat
+	rm -f selfie
+	rm -f selfie.exe
+	rm -f manuscript/code/symbolic/*.smt
+	rm -f manuscript/code/symbolic/*.btor2
